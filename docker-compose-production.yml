@@ -1,0 +1,99 @@
+version: '3.8'
+
+volumes:
+    vol-emqx-data:
+      name: foo-emqx-data
+    vol-emqx-etc:
+      name: foo-emqx-etc
+    vol-emqx-log:
+      name: foo-emqx-log
+
+
+services:
+  node:
+    container_name: node
+    image: "node:14"
+    restart: always
+    working_dir: /home/node/app
+    volumes:
+    - ./app/:/home/node/app/
+    command: sh -c ""
+    ports:
+      - 3000:3000
+      - 3001:3001
+      - 80:3002
+    links:
+      - emqx
+      - mongo
+      
+  mongo:
+      container_name: mongo
+      image: mongo:4.4
+      restart: always
+      environment: 
+        TZ: "${TZ}"
+        MONGO_INITDB_ROOT_USERNAME: "${mongo_username}"
+        MONGO_INITDB_ROOT_PASSWORD: "${mongo_password}"
+      volumes:
+        - ./mongodata:/data/db
+      ports: 
+        - ${mongo_port}:27017
+
+  emqx:
+      container_name: emqx
+      image: emqx/emqx:4.2.3
+      restart: always
+      ports: 
+          - ${emqx_dashPort}:18083
+          - 8083:8083
+          - 1883:1883
+          - 8883:8883 
+          - 8085:8081
+      volumes:
+          - vol-emqx-data:/opt/emqx/data
+          - vol-emqx-etc:/opt/emqx/etc
+          - vol-emqx-log:/opt/emqx/log
+      links:
+          - mongo # obtener la ip de mongo
+      extra_hosts:
+          - "localhost:192.168.1.4"
+      environment: 
+          EMQX_LISTENER__TCP__EXTERNAL__MAX_CONNECTIONS: 100
+          EMQX_NAME:  Dani_iot
+          EMQX_HOST: 127.0.0.1
+          TZ: "${TZ}"
+          EMQX_LOADED_PLUGINS: "emqx_recon,emqx_retainer,emqx_management,emqx_dashboard,emqx_auth_mongo" #iniciamos los plugins
+          # DEFAULT DASH PASS
+          EMQX_DASHBOARD__DEFAULT_USER__PASSWORD: "${emqx_user_pas}" # usuario: admin
+          # Default APP Secret
+          EMQX_DASHBOARD__DEFAULT_APPLICATION__SECRET: "${emqx_app_sicret}"
+          # EMQX conf (opt/emqx/etc/emqx.conf)
+          EMQX_ALLOW_ANONYMOUS: "false" #Avilitar autenticacion de ususarios
+          EMQX_NOMATCH: "deny" # Avilitar Reglas de cotrol de accesos
+
+
+          # MONGO CONNECTION (opt/emqx/etc/plugins/emqx_auth_mongo.conf)
+          EMQX_AUTH__MONGO__TYPE: single  #valor por default
+          EMQX_AUTH__MONGO__SERVER: "mongo:${mongo_port}" #URL para conectar a mongo
+          EMQX_AUTH__MONGO__POOL: 8  #cargas paralelas de reconeccion por si el servicion se cae
+          
+          EMQX_AUTH__MONGO__LOGIN: ${mongo_username}
+          EMQX_AUTH__MONGO__PASSWORD: ${mongo_password}
+          EMQX_AUTH__MONGO__AUTH_SOURCE: admin  #campo por default
+          
+          EMQX_AUTH__MONGO__DATABASE: "db_Iot" #base de datos a la que se conecta
+          EMQX_AUTH__MONGO__AUTH_QUERY__COLLECTION: "emqxauthrules" #Coleccion donde estan las credenciales
+
+          EMQX_AUTH__MONGO__SUPER_QUERY__COLLECTION: "emqxauthrules" #Coleccion donde estan los registros de super usuarios
+          EMQX_AUTH__MONGO__SUPER_QUERY__SUPER_FIELD: "is_superuser" # Campo que autentica si es super usuario
+          EMQX_AUTH__MONGO__SUPER_QUERY__SELECTOR: "username=%u"     # Lugar donde guarda el usuario. %u es la variable dond emqx guarda el ususario 
+          EMQX_AUTH__MONGO__SUPER_QUERY: "off"                       # Mantengo apagado el logeo como super ususario
+
+          EMQX_AUTH__MONGO__AUTH_QUERY__PASSWORD_HASH: plain         # Tipo de encriptacion de la contrasena. en este caso no hay, es texto plano
+          EMQX_AUTH__MONGO__AUTH_QUERY__PASSWORD_FIELD: "password"   # Campo donde se encuentra la contrasena
+          EMQX_AUTH__MONGO__AUTH_QUERY__SELECTOR: "username=%u"
+
+          ####Enable ACL queri (Access control list)
+          EMQX_AUTH__MONGO__ACL_QUERY: "on"
+          EMQX_AUTH__MONGO__ACL_QUERY__COLLECTION: "emqxauthrules"
+          EMQX_AUTH__MONGO__ACL_QUERY__SELECTOR: "username=%u"
