@@ -16,8 +16,9 @@ services:
     restart: always
     working_dir: /home/node/app
     volumes:
-    - ./app/:/home/node/app/
-    command: sh -c ""
+    - ./app/:/home/node/app
+    command: sh -c "npm run build && npm run start"
+    
     ports:
       - 3000:3000
       - 3001:3001
