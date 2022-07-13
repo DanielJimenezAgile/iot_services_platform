@@ -22,7 +22,6 @@ services:
     ports:
       - 3000:3000
       - 3001:3001
-      - 80:3002
     links:
       - emqx
       - mongo
